@@ -1,0 +1,121 @@
+CMD 1:
+%md
+# Top world's companies dataset
+
+https://www.kaggle.com/datasets/bhavikjikadara/top-worlds-companies/data
+
+
+CMD 2:
+%md
+
+## *1. DATA READING*
+
+CMD 3:
+# Nombre de la base de datos en Databricks
+database_name = "default"
+# Nombre de la tabla que deseas leer
+table_name = "top_worlds_companies"
+
+# Leer la tabla en un DataFrame de Spark
+df = spark.table(f"{database_name}.{table_name}")
+
+# Mostrar las primeras filas de la tabla
+display(df)
+
+
+CMD 4:
+%md
+## *2. BASIC DATA PROFILING*
+
+
+CMD 5:
+import numpy as np
+import matplotlib.pyplot as plt
+from pyspark.sql.functions import *
+from pyspark.sql.types import IntegerType, LongType, DoubleType
+
+def profile_data(df):
+    """
+    Profile the data in a Spark DataFrame.
+    
+    Args:
+    - df: Spark DataFrame
+    
+    Prints:
+    - General information about the DataFrame
+    - Specific information about each column, including:
+      - Data type
+      - Number of non-null values
+      - Number of null values
+      - Descriptive statistics (for numeric columns)
+      - Unique values and their frequencies (for categorical columns)
+      - Example values
+      - Histogram (for numeric columns)
+      - Correlation (for numeric columns)
+      - Proportion of missing values
+    """
+    # General information about the DataFrame
+    print("Información general del DataFrame:")
+    print(f"Número total de filas: {df.count()}")
+    print("Número de columnas:", len(df.columns))
+
+    # Specific information about each column
+    print("\nInformación de cada columna:")
+    for col_name in df.columns:
+        print(f"\nColumna: {col_name}")
+        print(f"Tipo de datos: {df.schema[col_name].dataType}")
+        print(f"Número de valores no nulos: {df.filter(col(col_name).isNotNull()).count()}")
+        print(f"Número de valores nulos: {df.filter(col(col_name).isNull()).count()}")
+        
+        # If the column is numeric, calculate descriptive statistics
+        if isinstance(df.schema[col_name].dataType, (IntegerType, LongType, DoubleType)):
+            stats = df.select(mean(col_name).alias('Mean'),
+                              min(col_name).alias('Min'),
+                              max(col_name).alias('Max')).collect()[0]
+            print(f"Media: {stats['Mean']}
+            print(f"Mínimo: {stats['Min']}, Máximo: {stats['Max']}")
+            
+            # Histogram
+             # Histogram
+            print("Histograma:")
+            # Collect the values into a list and pass it to the histogram function
+            values = [row[0] for row in df.select(col_name).collect()]
+            hist, bins = np.histogram(values, bins=10)
+            for i in range(len(hist)):
+                print(f"{bins[i]} - {bins[i+1]}: {hist[i]}")
+            
+            # Plot histogram
+            plt.hist(values, bins=10)
+            plt.title(f'Histograma de {col_name}')
+            plt.xlabel(col_name)
+            plt.ylabel('Frecuencia')
+            plt.show()
+            
+            # Correlation with other numeric columns
+            for other_col in df.columns:
+                if other_col != col_name and isinstance(df.schema[other_col].dataType, (IntegerType, LongType, DoubleType)):
+                    correlation = df.stat.corr(col_name, other_col)
+                    print(f"Correlación con {other_col}: {correlation}")
+        
+        # If the column is categorical, show unique values and their frequencies
+        elif df.schema[col_name].dataType in ['StringType']:
+            unique_values = df.groupBy(col_name).count().orderBy('count', ascending=False).collect()
+            print("Valores únicos:")
+            for val in unique_values:
+                print(f"{val[col_name]}: {val['count']}")
+        
+        # Show some example values (optional)
+        example_values = df.select(col_name).sample(False, 0.1).limit(5).collect()
+        print("Ejemplos de valores:")
+        for row in example_values:
+            print(row[col_name])
+            
+    # Proportion of missing values
+    print("\nProporción de valores ausentes por columna:")
+    total_rows = df.count()
+    for col_name in df.columns:
+        null_count = df.filter(col(col_name).isNull()).count()
+        print(f"{col_name}: {null_count/total_rows:.2%}")
+
+profile_data(df)
+
